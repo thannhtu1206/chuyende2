@@ -1,0 +1,70 @@
+from telegram import Update
+from telegram.ext import CommandHandler, Application, ContextTypes
+import requests
+import logging
+
+# API token của Telegram bot
+TELEGRAM_API_TOKEN = '7580914261:AAE6d8NeK_v7dKBXQyj5PCl0wTTtXDMifUw'
+# API key từ Alpha Vantage
+ALPHA_VANTAGE_API_KEY = 'E81EN9W6U7MMBUWR'
+
+# Cấu hình logging
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+logger = logging.getLogger(__name__)
+
+# Hàm lấy giá chứng khoán
+def get_stock_price(symbol):
+    try:
+        url = f'https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol={symbol}&apikey={ALPHA_VANTAGE_API_KEY}'
+        response = requests.get(url)
+        response.raise_for_status()
+        data = response.json()
+        
+        if 'Time Series (Daily)' in data:
+            latest_date = list(data['Time Series (Daily)'].keys())[0]
+            previous_date = list(data['Time Series (Daily)'].keys())[1]
+            
+            latest_close = float(data['Time Series (Daily)'][latest_date]['4. close'])
+            previous_close = float(data['Time Series (Daily)'][previous_date]['4. close'])
+            
+            return latest_close, previous_close
+        else:
+            logger.error(f"API error: {data.get('Note', 'No additional info')}")
+            return None, None
+    except Exception as e:
+        logger.error(f"Error fetching stock price for {symbol}: {e}")
+        return None, None
+
+# Hàm theo dõi chứng khoán và gửi thông báo
+async def track_stock(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if len(context.args) == 0:
+        await update.message.reply_text('Vui lòng nhập mã chứng khoán để theo dõi. Ví dụ: /theodoi AAPL')
+        return
+
+    stock_code = context.args[0].upper()
+    await update.message.reply_text(f'Đang lấy dữ liệu cho mã chứng khoán {stock_code}...')
+    
+    latest_price, previous_price = get_stock_price(stock_code)
+    if latest_price is not None and previous_price is not None:
+        price_change = (latest_price - previous_price) / previous_price * 100
+        if price_change >= 1:
+            message = f'Mã chứng khoán {stock_code} đã tăng {price_change:.2f}% so với ngày hôm qua. Giá hiện tại: {latest_price} USD.'
+        else:
+            message = f'Mã chứng khoán {stock_code} chưa đạt mức tăng 1%. Giá hiện tại: {latest_price} USD.'
+        await update.message.reply_text(message)
+    else:
+        await update.message.reply_text(f'Không thể lấy dữ liệu cho mã chứng khoán {stock_code}. Vui lòng thử lại sau.')
+
+# Hàm cài đặt bot Telegram
+def start_bot():
+    application = Application.builder().token(TELEGRAM_API_TOKEN).build()
+    application.add_handler(CommandHandler('theodoi', track_stock))  # Câu lệnh /theodoi [mã chứng khoán]
+
+    logger.info("Bot đang chạy...")
+    application.run_polling()
+
+if __name__ == '__main__':
+    start_bot()
