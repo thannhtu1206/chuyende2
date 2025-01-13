@@ -1,0 +1,19 @@
+from telegram import Update
+from telegram.ext import Application, CommandHandler, CallbackContext
+
+API_TOKEN = "7580914261:AAE87uruahvlh9I9sKnuCOo9piLkbloJbI8"
+
+async def start(update: Update, context: CallbackContext) -> None:
+    await update.message.reply_text('Hello!')
+
+def main():
+    application = Application.builder().token(API_TOKEN).build()
+
+    # Đăng ký lệnh /start
+    application.add_handler(CommandHandler("start", start))
+
+    # Bắt đầu bot
+    application.run_polling()
+
+if __name__ == '__main__':
+    main()
